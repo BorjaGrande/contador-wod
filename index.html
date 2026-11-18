@@ -6,6 +6,11 @@
   <meta name="theme-color" content="#09111e">
   <meta name="description" content="Cronómetro de vueltas para entrenamientos. Funciona sin conexión, guarda la sesión y exporta resultados.">
   <title>Contador de vueltas · Entrenamiento</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Contador WOD">
   <style>
     :root {
       color-scheme: dark;
@@ -146,7 +151,7 @@
         <button id="exportBtn" type="button" class="tool" disabled>↓ Exportar CSV</button>
       </div>
     </section>
-    <p class="footer">La sesión se guarda en este dispositivo · Atajos: espacio, P, Z</p>
+    <p class="footer">La sesión se guarda en este dispositivo · Atajos: espacio, P, Z<br><span id="offlineStatus">Preparando modo sin conexión…</span></p>
   </main>
 
   <dialog id="confirmDialog" aria-labelledby="dialogTitle">
@@ -255,15 +260,23 @@
     function beep(frequency = 920, duration = .08) {
       if (!soundEnabled) return;
       try {
-        audioCtx ??= new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        const oscillator = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        oscillator.type = 'sine'; oscillator.frequency.value = frequency;
-        gain.gain.setValueAtTime(.14, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(.001, audioCtx.currentTime + duration);
-        oscillator.connect(gain); gain.connect(audioCtx.destination);
-        oscillator.start(); oscillator.stop(audioCtx.currentTime + duration);
+        const Audio = window.AudioContext || window.webkitAudioContext;
+        if (!Audio) return;
+        if (!audioCtx || audioCtx.state === 'closed') audioCtx = new Audio();
+        const context = audioCtx;
+        function play() {
+          if (context !== audioCtx || context.state !== 'running') return;
+          const oscillator = context.createOscillator();
+          const gain = context.createGain();
+          oscillator.type = 'sine'; oscillator.frequency.value = frequency;
+          const now = context.currentTime;
+          gain.gain.setValueAtTime(.14, now);
+          gain.gain.exponentialRampToValueAtTime(.001, now + duration);
+          oscillator.connect(gain); gain.connect(context.destination);
+          oscillator.start(now); oscillator.stop(now + duration);
+        }
+        if (context.state !== 'running') context.resume().then(play).catch(() => {});
+        else play();
       } catch (_) { /* audio bloqueado o no compatible */ }
     }
 
@@ -498,6 +511,26 @@
     load();
     renderLaps();
     if (state === 'running') { tick(); keepAwake(); save(); }
+  })();
+  </script>
+  <script>
+  // Registra el trabajador de servicio para abrir la app sin conexión.
+  (() => {
+    const status = document.getElementById('offlineStatus');
+    if (!('serviceWorker' in navigator)) {
+      status.textContent = 'Este navegador no admite modo sin conexión';
+      return;
+    }
+    window.addEventListener('load', async () => {
+      try {
+        await navigator.serviceWorker.register('./sw.js', { scope: './' });
+        await navigator.serviceWorker.ready;
+        status.textContent = 'Modo sin conexión preparado';
+      } catch (error) {
+        status.textContent = 'Modo sin conexión pendiente: abre con internet';
+        console.warn('No se pudo activar el modo sin conexión', error);
+      }
+    });
   })();
   </script>
 </body>
