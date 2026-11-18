@@ -1,7 +1,7 @@
 {
-  "name": "Contador WOD · Contador de vueltas",
+  "name": "Contador WOD · Entrenamientos CrossFit",
   "short_name": "Contador WOD",
-  "description": "Cronómetro y contador de vueltas para entrenamientos",
+  "description": "Contador de vueltas y modos AMRAP, FOR TIME, EMOM y TABATA",
   "lang": "es",
   "start_url": "./",
   "scope": "./",

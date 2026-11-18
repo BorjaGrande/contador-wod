@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#09111e">
   <meta name="description" content="Cronómetro de vueltas para entrenamientos. Funciona sin conexión, guarda la sesión y exporta resultados.">
-  <title>Contador de vueltas · Entrenamiento</title>
+  <title>Contador WOD · Entrenamiento</title>
+  <link rel="stylesheet" href="./modes.css">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="apple-touch-icon" href="./icon-180.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -113,11 +114,45 @@
     <header class="header">
       <div>
         <div class="eyebrow">ENTRENAMIENTO</div>
-        <h1>Contador de vueltas</h1>
+        <h1 id="appTitle">Contador de vueltas</h1>
       </div>
-      <button id="soundBtn" class="icon-btn" type="button" aria-label="Desactivar sonido" title="Activar/desactivar sonido">SONIDO</button>
+      <div class="top-actions">
+        <button id="modeNavBtn" class="icon-btn" type="button" hidden>MODOS</button>
+        <button id="wodSoundBtn" class="icon-btn" type="button" hidden>SONIDO</button>
+        <button id="soundBtn" class="icon-btn" type="button" aria-label="Desactivar sonido" title="Activar/desactivar sonido">SONIDO</button>
+      </div>
     </header>
 
+
+    <section id="modeSelectScreen" class="mode-picker" hidden aria-labelledby="modePickerHeading">
+      <div class="mode-intro">
+        <div class="eyebrow">CONTADOR WOD 2.2</div>
+        <h2 id="modePickerHeading">¿Qué vas a entrenar?</h2>
+        <p>Elige una modalidad y configura el cronómetro.</p>
+      </div>
+      <div class="mode-grid">
+        <button type="button" class="mode-tile" data-mode="vueltas"><b>VUELTAS</b><small>Contador original 2.1</small></button>
+        <button type="button" class="mode-tile" data-mode="amrap"><b>AMRAP</b><small>Máximas rondas en un tiempo</small></button>
+        <button type="button" class="mode-tile" data-mode="fortime"><b>FOR TIME</b><small>Completar el trabajo</small></button>
+        <button type="button" class="mode-tile" data-mode="emom"><b>EMOM</b><small>Intervalos automáticos</small></button>
+        <button type="button" class="mode-tile" data-mode="tabata"><b>TABATA</b><small>Trabajo y descanso</small></button>
+      </div>
+      <section id="wodConfig" class="wod-panel" hidden>
+        <h3 id="configTitle">Configurar entrenamiento</h3>
+        <div class="config-row" data-config="amrap"><label for="amrapMinutes">Duración (minutos)</label><input id="amrapMinutes" type="number" min="1" max="180" step="1" value="20" inputmode="numeric"></div>
+        <div class="config-row" data-config="fortime"><label for="forTimeCap">Tiempo máximo (cap)</label><select id="forTimeCap"><option value="0">Sin límite</option><option value="10">10 minutos</option><option value="15">15 minutos</option><option value="20">20 minutos</option><option value="30">30 minutos</option><option value="40">40 minutos</option><option value="60">60 minutos</option></select></div>
+        <div class="config-row" data-config="emom"><label for="emomIntervals">Número de intervalos</label><input id="emomIntervals" type="number" min="1" max="120" step="1" value="12" inputmode="numeric"></div>
+        <div class="config-row" data-config="emom"><label for="emomSeconds">Segundos por intervalo</label><input id="emomSeconds" type="number" min="10" max="600" step="5" value="60" inputmode="numeric"></div>
+        <div class="config-row" data-config="tabata"><label for="tabataRounds">Rondas</label><input id="tabataRounds" type="number" min="1" max="60" step="1" value="8" inputmode="numeric"></div>
+        <div class="config-row" data-config="tabata"><label for="tabataWork">Trabajo (segundos)</label><input id="tabataWork" type="number" min="5" max="600" step="5" value="20" inputmode="numeric"></div>
+        <div class="config-row" data-config="tabata"><label for="tabataRest">Descanso (segundos)</label><input id="tabataRest" type="number" min="5" max="600" step="5" value="10" inputmode="numeric"></div>
+        <button id="prepareWodBtn" class="prepare-btn" type="button">PREPARAR ENTRENAMIENTO</button>
+      </section>
+      <label class="wake-toggle"><input id="keepScreenPicker" type="checkbox" checked> Mantener pantalla encendida mientras corre el tiempo</label>
+      <p class="mode-note">Las sesiones se guardan en este dispositivo. Los avisos sonoros requieren la aplicación visible.</p>
+    </section>
+
+    <div id="legacyScreen" hidden>
     <section class="center" aria-label="Cronómetro">
       <div id="status" class="status" aria-live="polite"><span class="dot"></span><span id="statusText">LISTO PARA EMPEZAR</span></div>
       <div id="timer" class="time" role="timer" aria-label="Tiempo total">00:00.0</div>
@@ -136,6 +171,7 @@
       </button>
     </div>
     <p class="help">Mantén FINALIZAR 3 segundos para reiniciar. Si lo tocas, se pedirá confirmación.</p>
+    <label class="wake-toggle"><input id="keepScreenLegacy" type="checkbox" checked> Mantener pantalla encendida</label>
 
     <section aria-label="Estadísticas" class="stats">
       <div class="stat"><div class="stat-name">ÚLTIMA</div><div id="lastStat" class="stat-value">—</div></div>
@@ -151,7 +187,46 @@
         <button id="exportBtn" type="button" class="tool" disabled>↓ Exportar CSV</button>
       </div>
     </section>
-    <p class="footer">La sesión se guarda en este dispositivo · Atajos: espacio, P, Z<br><span id="offlineStatus">Preparando modo sin conexión…</span></p>
+
+    </div><!-- legacyScreen: código y controles originales intactos -->
+
+    <section id="wodScreen" class="wod-screen" hidden aria-label="Entrenamiento por modalidad">
+      <div class="wod-heading">
+        <div>
+          <div id="wodModeTitle" class="eyebrow">AMRAP</div>
+          <div id="wodModeDescription" class="wod-mode-description">20 minutos</div>
+        </div>
+        <button id="changeModeBtn" type="button" class="tool small-tool">Cambiar modo</button>
+      </div>
+      <section class="wod-clock center" aria-live="off">
+        <div id="wodStatus" class="status"><span class="dot"></span><span id="wodStatusText">LISTO</span></div>
+        <div id="wodTimer" class="time" role="timer">20:00.0</div>
+        <div class="wod-progress"><div id="wodProgressFill"></div></div>
+        <div id="wodPhase" class="wod-phase">Ronda 1</div>
+        <div id="wodSubTime" class="lap-time">00:00.0</div>
+        <button id="wodMainBtn" type="button" class="main-button" aria-label="Iniciar entrenamiento"><span id="wodMainText" class="main-text">INICIAR</span><span id="wodMainSub" class="main-sub">Toca para empezar</span></button>
+      </section>
+      <div class="buttons">
+        <button id="wodPauseBtn" type="button" class="secondary pause" disabled>PAUSAR</button>
+        <button id="wodFinishBtn" type="button" class="secondary reset" disabled>FINALIZAR WOD</button>
+      </div>
+      <label class="wake-toggle"><input id="keepScreenWod" type="checkbox" checked> Mantener pantalla encendida</label>
+      <div class="wod-panel wod-summary" id="wodScorePanel">
+        <div class="stat-name">RESULTADO</div>
+        <div id="wodScore" class="wod-score">Sin comenzar</div>
+        <div id="wodResultDetails" class="wod-result-detail"></div>
+        <div id="repsBox" class="config-row" hidden><label for="extraReps">Repeticiones adicionales</label><input id="extraReps" type="number" min="0" max="999" step="1" value="0" inputmode="numeric"></div>
+      </div>
+      <div class="section-head"><span class="section-title" id="wodHistoryTitle">Registro</span><span id="wodCount" class="count">0 rondas</span></div>
+      <ol id="wodHistory" class="lap-list"><li class="empty">Comienza tu sesión para registrar el entrenamiento.</li></ol>
+      <div class="tools">
+        <button id="wodUndoBtn" type="button" class="tool" disabled>↶ Deshacer última</button>
+        <button id="wodExportBtn" type="button" class="tool" disabled>↓ Exportar CSV</button>
+        <button id="wodResetBtn" type="button" class="tool">Reiniciar sesión</button>
+      </div>
+      <p class="wod-note">Los avisos sonoros dependen de iOS y de que la aplicación esté visible. No son alarmas en segundo plano.</p>
+    </section>
+    <p class="footer">La sesión se guarda en este dispositivo · <span id="offlineStatus">Preparando modo sin conexión…</span><br>Contador WOD 2.2 · Estable</p>
   </main>
 
   <dialog id="confirmDialog" aria-labelledby="dialogTitle">
@@ -164,6 +239,11 @@
   </dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <script>
+  // Conserva la clave y el estado del contador 2.1: solo se añade un ajuste opcional.
+  try { window.contadorWakeEnabled = JSON.parse(localStorage.getItem('contador-wod-v2.2-preferences') || '{}').keepAwake !== false; }
+  catch (_) { window.contadorWakeEnabled = true; }
+  </script>
   <script>
   (() => {
     'use strict';
@@ -244,7 +324,7 @@
 
     async function keepAwake() {
       try {
-        if (state === 'running' && 'wakeLock' in navigator && !wakeLock) {
+        if (state === 'running' && window.contadorWakeEnabled !== false && 'wakeLock' in navigator && !wakeLock) {
           const lock = await navigator.wakeLock.request('screen');
           if (state !== 'running') { await lock.release(); return; }
           wakeLock = lock;
@@ -507,12 +587,14 @@
       }
     });
     window.addEventListener('pagehide', letSleep);
+    document.addEventListener('contador-wake-change', () => { if (window.contadorWakeEnabled === false) letSleep(); else keepAwake(); });
 
     load();
     renderLaps();
     if (state === 'running') { tick(); keepAwake(); save(); }
   })();
   </script>
+  <script defer src="./modes.js"></script>
   <script>
   // Registra el trabajador de servicio para abrir la app sin conexión.
   (() => {
