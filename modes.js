@@ -1,4 +1,4 @@
-/* Contador WOD 2.2.0: nuevos modos aislados del cronómetro original 2.1. */
+/* Contador WOD 2.2.1: nuevos modos aislados del cronómetro original 2.1. */
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
@@ -33,6 +33,53 @@
     const number = Number($(id).value);
     return Number.isInteger(number) && number >= min && number <= max ? number : null;
   };
+  // Protocolo de transferencia desde Generador WOD: sólo configuración temporal.
+  // Rechazar datos incompletos o alterados sin modificar sesiones existentes.
+  function incomingConfig(search = window.location.search) {
+    const q = new URLSearchParams(search);
+    if(q.get('from') !== 'generador-wod') return null;
+    if(q.get('v') !== '1') throw new Error('Enlace de generador no compatible.');
+    const read = (key, min, max) => {
+      const raw=q.get(key);
+      if(raw===null || !/^\d{1,4}$/.test(raw)) throw new Error(`Falta o no es válido: ${key}.`);
+      const n=Number(raw);
+      if(!Number.isInteger(n)||n<min||n>max)throw new Error(`Valor fuera de rango: ${key}.`);
+      return n;
+    };
+    const mode=q.get('mode');
+    let config;
+    if(mode==='amrap')config={minutes:read('minutes',1,180)};
+    else if(mode==='fortime')config={capMinutes:read('cap',0,60)};
+    else if(mode==='emom')config={intervals:read('intervals',1,120),seconds:read('seconds',10,600)};
+    else if(mode==='tabata'){
+      const rounds=read('rounds',1,60),work=read('work',5,600),rest=read('rest',5,600);
+      const configBlocks=q.has('blocks')||q.has('perblock')||q.has('break');
+      if(configBlocks){
+        const blocks=read('blocks',1,6),perBlock=read('perblock',1,60),breakSeconds=read('break',0,600);
+        if(blocks*perBlock!==rounds)throw new Error('Rondas y bloques TABATA no coinciden.');
+        config={rounds,work,rest,blocks,roundsPerBlock:perBlock,breakSeconds};
+      }else config={rounds,work,rest};
+    }else throw new Error('Modalidad de WOD no reconocida.');
+    return {mode,config};
+  }
+  function tabataTotalMs(c){
+    return c.rounds*(c.work+c.rest)*1000 + (c.blocks>1?(c.blocks-1)*(c.breakSeconds||0)*1000:0);
+  }
+  function tabataPhase(c,t) {
+    if(!(c.blocks>1 && c.breakSeconds>0))return null;
+    const blockMs=c.roundsPerBlock*(c.work+c.rest)*1000, breakMs=c.breakSeconds*1000;
+    const block=Math.min(c.blocks-1,Math.floor(t/(blockMs+breakMs)));
+    const within=t-block*(blockMs+breakMs);
+    if(within>=blockMs && block<c.blocks-1){
+      const remaining=Math.max(0,breakMs-(within-blockMs));
+      return {id:`blockbreak-${block}`,text:`DESCANSO ENTRE BLOQUES · ${block+1}/${c.blocks}`,sub:`Siguiente bloque ${block+2} / ${c.blocks}`,remaining,progress:1-remaining/breakMs,index:(block+1)*c.roundsPerBlock,resting:true};
+    }
+    const cycle=(c.work+c.rest)*1000, row=Math.min(c.roundsPerBlock-1,Math.floor(within/cycle));
+    const cycleMs=within-row*cycle, working=cycleMs<c.work*1000;
+    const phaseMs=(working?c.work:c.rest)*1000;
+    const remaining=working?c.work*1000-cycleMs:cycle-cycleMs;
+    return {id:`${block}-${row}-${working?'work':'rest'}`,text:`${working?'TRABAJO':'DESCANSO'} · BLOQUE ${block+1}/${c.blocks} · RONDA ${row+1}/${c.roundsPerBlock}`,sub:`${working?c.work:c.rest} segundos`,remaining:Math.max(0,remaining),progress:1-Math.max(0,remaining)/phaseMs,index:block*c.roundsPerBlock+row+1,resting:!working};
+  }
   const format = value => {
     const d = Math.floor(Math.max(0, value) / 100);
     const tenth = d % 10;
@@ -122,7 +169,7 @@
     if (session.mode === 'amrap') return c.minutes * 60000;
     if (session.mode === 'fortime') return c.capMinutes ? c.capMinutes * 60000 : null;
     if (session.mode === 'emom') return c.intervals * c.seconds * 1000;
-    if (session.mode === 'tabata') return c.rounds * (c.work + c.rest) * 1000;
+    if (session.mode === 'tabata') return tabataTotalMs(c);
     return null;
   }
 
@@ -142,6 +189,8 @@
       return { id: `e${index}`, text: `INTERVALO ${index + 1} / ${c.intervals}`, sub: `EMOM de ${c.seconds} s`, remaining: Math.max(0, step - (t - index * step)), progress: (t - index * step) / step, index: index + 1 };
     }
     if (current.mode === 'tabata') {
+      const special=tabataPhase(c,t);
+      if(special)return special;
       const work = c.work * 1000, rest = c.rest * 1000, cycle = work + rest;
       const index = Math.min(c.rounds - 1, Math.floor(t / cycle));
       const cycleTime = Math.max(0, t - index * cycle);
@@ -254,7 +303,7 @@
     if (session.mode === 'amrap') return `${session.config.minutes} minutos`;
     if (session.mode === 'fortime') return session.config.capMinutes ? `Cap: ${session.config.capMinutes} min` : 'Sin tiempo límite';
     if (session.mode === 'emom') return `${session.config.intervals} intervalos de ${session.config.seconds} s`;
-    if (session.mode === 'tabata') return `${session.config.rounds} rondas · ${session.config.work} s trabajo / ${session.config.rest} s descanso`;
+    if (session.mode === 'tabata') return `${session.config.rounds} rondas · ${session.config.work} s trabajo / ${session.config.rest} s descanso${session.config.blocks>1?` · ${session.config.blocks} bloques con ${session.config.breakSeconds||0} s entre bloques`:''}`;
     return '';
   }
 
@@ -305,7 +354,7 @@
     $('repsBox').hidden = !(current.mode === 'amrap' && finished);
     $('wodExportBtn').disabled = status === 'ready';
     const t = elapsed();
-    const amount = current.mode === 'emom' ? current.doneIntervals.length : current.mode === 'tabata' ? (finished ? current.config.rounds : Math.min(current.config.rounds, Math.ceil(t / ((current.config.work + current.config.rest) * 1000)))) : current.splits.length;
+    const amount = current.mode === 'emom' ? current.doneIntervals.length : current.mode === 'tabata' ? (finished ? current.config.rounds : Math.min(current.config.rounds, phaseAt(t).index)) : current.splits.length;
     $('wodCount').textContent = current.mode === 'emom' ? `${amount} marcados` : current.mode === 'tabata' ? `${amount} rondas` : `${amount} ${amount === 1 ? 'vuelta' : 'vueltas'}`;
     $('wodHistoryTitle').textContent = current.mode === 'emom' ? 'Intervalos completados' : current.mode === 'tabata' ? 'Programa de intervalos' : 'Historial de vueltas';
     const reason = current.finishReason === 'limit';
@@ -319,7 +368,7 @@
       $('wodScore').textContent = `${current.doneIntervals.length} / ${current.config.intervals} completados`;
       $('wodResultDetails').textContent = finished ? `Duración: ${format(t)}` : 'Marca HECHO dentro de cada intervalo';
     } else {
-      $('wodScore').textContent = finished ? (reason ? `${current.config.rounds} rondas completadas` : `Detenido · ${Math.min(current.config.rounds, Math.ceil(t / ((current.config.work + current.config.rest) * 1000)))} rondas iniciadas`) : `Ronda ${Math.min(current.config.rounds, Math.floor(t / ((current.config.work + current.config.rest) * 1000)) + 1)} de ${current.config.rounds}`;
+      $('wodScore').textContent = finished ? (reason ? `${current.config.rounds} rondas completadas` : `Detenido · ${Math.min(current.config.rounds, phaseAt(t).index)} rondas iniciadas`) : `Ronda ${Math.min(current.config.rounds, phaseAt(t).index)} de ${current.config.rounds}`;
       $('wodResultDetails').textContent = finished ? `Tiempo: ${format(t)}${reason ? '' : ' · Detenido manualmente'}` : description();
     }
     renderClock(t, phaseAt(t));
@@ -402,11 +451,31 @@
     if (session.mode === 'emom' && !(valid(c.intervals, 1, 120) && valid(c.seconds, 10, 600))) return false;
     if (session.mode === 'emom' && session.doneIntervals.some(x => x > c.intervals)) return false;
     if (session.mode === 'tabata' && !(valid(c.rounds, 1, 60) && valid(c.work, 5, 600) && valid(c.rest, 5, 600))) return false;
+    if(session.mode==='tabata' && c.blocks!==undefined && !(valid(c.blocks,1,6)&&valid(c.roundsPerBlock,1,60)&&valid(c.breakSeconds,0,600)&&c.blocks*c.roundsPerBlock===c.rounds))return false;
     if (session.status === 'running' && !Number.isFinite(session.wallStart)) return false;
     session.extraReps = Number.isInteger(session.extraReps) && session.extraReps >= 0 && session.extraReps <= 999 ? session.extraReps : 0;
     return true;
   }
 
+  function applyIncomingConfig() {
+    let prepared;
+    try{prepared=incomingConfig();}
+    catch(err){notice(`No se pudo preparar el WOD: ${err.message}`);return false;}
+    if(!prepared)return false;
+    // Una sesión en curso o terminada requiere aprobación antes de sustituirse.
+    if(current && ['running','paused','finished'].includes(current.status)) {
+      if(!window.confirm('Hay una sesión anterior en el Contador WOD. ¿Quieres sustituirla por el nuevo entrenamiento? Los resultados de la anterior podrían perderse.'))return false;
+    }
+    if(current?.status==='running')cancelAnimationFrame(rafId);
+    releaseWake();resetCues();
+    current={version:1,mode:prepared.mode,status:'ready',config:prepared.config,elapsedBeforeRun:0,wallStart:0,splits:[],doneIntervals:[],extraReps:0,finishReason:null,finishedAt:null,source:'generador-wod'};
+    $('extraReps').value='0';
+    persist();show('wod');
+    // Evita volver a importar la misma URL tras refrescar; la sesión READY ya está guardada.
+    try{history.replaceState(null,'',window.location.pathname+window.location.hash);}catch(_){}
+    notice('WOD preparado desde Generador. Pulsa INICIAR cuando estés listo.');
+    return true;
+  }
   function loadSession() {
     const saved = safeRead(SESSION_KEY);
     if (!validateSaved(saved)) return;
@@ -511,9 +580,14 @@
     });
     window.addEventListener('pagehide', releaseWake);
     const legacy = safeRead(LEGACY_KEY);
-    if (legacy && (legacy.state === 'running' || legacy.state === 'paused')) show('legacy');
-    else if (current) { show('wod'); if (current.status === 'running') tick(); }
-    else show('picker');
+    // No tocar el contador original 2.1 si está en marcha.
+    if (legacy && (legacy.state === 'running' || legacy.state === 'paused')) {
+      show('legacy');
+      if(new URLSearchParams(window.location.search).get('from')==='generador-wod') notice('Finaliza el contador de vueltas antes de importar un WOD.');
+    } else if (!applyIncomingConfig()) {
+      if (current) { show('wod'); if (current.status === 'running') tick(); }
+      else show('picker');
+    }
   }
   init();
 })();

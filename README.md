@@ -1,4 +1,4 @@
-# Contador WOD 2.2.0 — versión de producción
+# Contador WOD 2.2.1 — integración con Generador WOD
 
 ## Incluye
 
@@ -12,8 +12,8 @@
 
 ## Antes de publicar
 
-1. En el repositorio principal `contador-wod`, crear etiqueta **v2.1.0** sobre el último commit de la versión 2.1; no etiquetar todavía el código 2.2.
-2. Exportar en CSV la sesión del contador 2.1 que se desee conservar. Si hay una sesión corriendo, finalizarla o pausarla antes de actualizar.
+1. Conservar las etiquetas anteriores; esta versión es un parche sobre la 2.2.0 estable.
+2. Exportar en CSV cualquier sesión anterior que se quiera conservar; evitar actualizar mientras un cronómetro esté en marcha.
 3. Mantener el repositorio `contador-wod-beta` sin cambios como referencia de pruebas.
 
 ## Publicación
@@ -23,7 +23,7 @@
 3. GitHub Pages debe seguir apuntando a la rama `main` y la carpeta `/(root)`.
 4. Abrir con internet la aplicación instalada en el iPhone. Si todavía muestra la 2.1, cerrar/abrir con internet y comprobar si se ha activado el nuevo service worker. No borrar datos ni desinstalar la app como primera medida.
 5. Repetir pruebas de humo: abrir, sesión original intacta, AMRAP, modo avión, sonido y pantalla encendida.
-6. Si funciona, crear etiqueta **v2.2.0** para identificar el commit publicado.
+6. Si funciona, crear etiqueta **v2.2.1** para identificar el commit publicado.
 
 ## Persistencia y precauciones
 
@@ -33,3 +33,11 @@
 - Las sesiones se guardan solo en el navegador/dispositivo; borrar los datos del sitio o eliminar la app puede borrarlas.
 - iOS puede impedir sonidos en segundo plano o denegar Screen Wake Lock.
 - La actualización del service worker puede precisar volver a abrir la aplicación con conexión; no es necesario reinstalarla.
+
+
+## Integración v2.2.1
+- Acepta URL `?from=generador-wod&v=1&mode=fortime&cap=15` y variantes AMRAP, EMOM y TABATA.
+- Verifica rangos y crea sesión pausada/lista, sin iniciarla automáticamente.
+- Soporta TABATA con descansos entre bloques enviados desde el Generador.
+- Pregunta antes de reemplazar sesiones activas o terminadas. No toca datos del contador original 2.1.
+- Mantiene las mismas claves de almacenamiento. Actualizar **antes** que Generador WOD v1.0.13.
