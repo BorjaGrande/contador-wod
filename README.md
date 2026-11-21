@@ -1,4 +1,4 @@
-# Contador WOD 2.2.1 — integración con Generador WOD
+# Contador WOD 2.2.2 — integración con Generador WOD
 
 ## Incluye
 
@@ -41,3 +41,13 @@
 - Soporta TABATA con descansos entre bloques enviados desde el Generador.
 - Pregunta antes de reemplazar sesiones activas o terminadas. No toca datos del contador original 2.1.
 - Mantiene las mismas claves de almacenamiento. Actualizar **antes** que Generador WOD v1.0.13.
+
+
+## Ajuste v2.2.2 — cuenta atrás de salida opcional
+
+- Añade la casilla **Cuenta atrás inicial de 10 s**, activada por defecto, a selección de modo, vueltas y contador WOD. Las tres reflejan la misma preferencia.
+- Al pulsar INICIAR desde una sesión nueva, muestra 10…1 y suena una señal al comenzar; el cronómetro empieza **después** de la cuenta atrás. Los 10 s no alteran el CAP ni la duración de AMRAP/EMOM/TABATA.
+- Desmarcada: INICIAR comienza inmediatamente. Al reanudar una pausa no repite la cuenta atrás.
+- Durante la cuenta atrás, el botón principal permite cancelarla. Ocultar/cerrar la aplicación o cambiar de modo la cancela para evitar iniciar un entrenamiento sin verlo.
+- Se recuerda la casilla en la clave de preferencias existente `contador-wod-v2.2-preferences` como `startCountdown10`; no modifica las claves ni el contenido de los entrenamientos guardados. Las sesiones recibidas desde Generador WOD también respetan la preferencia.
+- Versión de caché `v2.2.2`. Solo hay que actualizar el Contador; el Generador WOD 1.0.13 no cambia.

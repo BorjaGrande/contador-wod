@@ -126,7 +126,7 @@
 
     <section id="modeSelectScreen" class="mode-picker" hidden aria-labelledby="modePickerHeading">
       <div class="mode-intro">
-        <div class="eyebrow">CONTADOR WOD 2.2</div>
+        <div class="eyebrow">CONTADOR WOD 2.2.2</div>
         <h2 id="modePickerHeading">¿Qué vas a entrenar?</h2>
         <p>Elige una modalidad y configura el cronómetro.</p>
       </div>
@@ -148,6 +148,7 @@
         <div class="config-row" data-config="tabata"><label for="tabataRest">Descanso (segundos)</label><input id="tabataRest" type="number" min="5" max="600" step="5" value="10" inputmode="numeric"></div>
         <button id="prepareWodBtn" class="prepare-btn" type="button">PREPARAR ENTRENAMIENTO</button>
       </section>
+      <label class="wake-toggle countdown-toggle"><input id="countdownPicker" type="checkbox" checked> Cuenta atrás inicial de 10 s</label>
       <label class="wake-toggle"><input id="keepScreenPicker" type="checkbox" checked> Mantener pantalla encendida mientras corre el tiempo</label>
       <p class="mode-note">Las sesiones se guardan en este dispositivo. Los avisos sonoros requieren la aplicación visible.</p>
     </section>
@@ -171,6 +172,7 @@
       </button>
     </div>
     <p class="help">Mantén FINALIZAR 3 segundos para reiniciar. Si lo tocas, se pedirá confirmación.</p>
+    <label class="wake-toggle countdown-toggle"><input id="countdownLegacy" type="checkbox" checked> Cuenta atrás inicial de 10 s</label>
     <label class="wake-toggle"><input id="keepScreenLegacy" type="checkbox" checked> Mantener pantalla encendida</label>
 
     <section aria-label="Estadísticas" class="stats">
@@ -210,6 +212,7 @@
         <button id="wodPauseBtn" type="button" class="secondary pause" disabled>PAUSAR</button>
         <button id="wodFinishBtn" type="button" class="secondary reset" disabled>FINALIZAR WOD</button>
       </div>
+      <label class="wake-toggle countdown-toggle"><input id="countdownWod" type="checkbox" checked> Cuenta atrás inicial de 10 s</label>
       <label class="wake-toggle"><input id="keepScreenWod" type="checkbox" checked> Mantener pantalla encendida</label>
       <div class="wod-panel wod-summary" id="wodScorePanel">
         <div class="stat-name">RESULTADO</div>
@@ -226,7 +229,7 @@
       </div>
       <p class="wod-note">Los avisos sonoros dependen de iOS y de que la aplicación esté visible. No son alarmas en segundo plano.</p>
     </section>
-    <p class="footer">La sesión se guarda en este dispositivo · <span id="offlineStatus">Preparando modo sin conexión…</span><br>Contador WOD 2.2 · Estable</p>
+    <p class="footer">La sesión se guarda en este dispositivo · <span id="offlineStatus">Preparando modo sin conexión…</span><br>Contador WOD 2.2.2 · Estable</p>
   </main>
 
   <dialog id="confirmDialog" aria-labelledby="dialogTitle">
@@ -240,7 +243,8 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script>
-  // Conserva la clave y el estado del contador 2.1: solo se añade un ajuste opcional.
+  // Conserva las claves de estado de 2.1 y preferencias de 2.2.
+  // La cuenta atrás es una preferencia compartida, NO parte del tiempo del WOD.
   try { window.contadorWakeEnabled = JSON.parse(localStorage.getItem('contador-wod-v2.2-preferences') || '{}').keepAwake !== false; }
   catch (_) { window.contadorWakeEnabled = true; }
   </script>
@@ -400,6 +404,16 @@
       soundBtn.textContent = soundEnabled ? 'SONIDO' : 'SILENCIO';
       soundBtn.setAttribute('aria-label', soundEnabled ? 'Desactivar sonido' : 'Activar sonido');
       renderClock();
+      const preparacion = window.contadorPrestart?.remaining('legacy');
+      if (preparacion !== null && preparacion !== undefined) {
+        statusText.textContent = 'CUENTA ATRÁS DE SALIDA';
+        timerEl.textContent = `00:${String(preparacion).padStart(2, '0')}.0`;
+        currentLapEl.textContent = '00:00.0';
+        mainText.textContent = 'CANCELAR';
+        mainSub.textContent = 'Cancelar cuenta atrás';
+        mainBtn.setAttribute('aria-label', 'Cancelar cuenta atrás');
+        mainBtn.classList.add('prestarting');
+      } else mainBtn.classList.remove('prestarting');
     }
 
     function renderLaps() {
@@ -449,8 +463,19 @@
       renderUI();
     }
 
-    function start() {
+    function start(skipCountdown = false) {
       if (state === 'running') return;
+      const prep = window.contadorPrestart;
+      if (prep?.active('legacy')) { prep.cancel(); return; }
+      if (!skipCountdown && state === 'idle' && prep?.enabled()) {
+        prep.begin('legacy', {
+          onTick: (seconds) => { renderUI(); if (seconds <= 3) beep(760, .08); },
+          onGo: () => start(true),
+          onCancel: () => renderUI()
+        });
+        beep(650, .05); // Desbloquea audio en respuesta directa al toque en iOS.
+        return;
+      }
       monotonicStart = performance.now();
       wallStart = Date.now();
       state = 'running';
@@ -483,6 +508,7 @@
     }
 
     function reset() {
+      window.contadorPrestart?.cancel();
       cancelHold();
       cancelAnimationFrame(rafId); letSleep();
       state = 'idle'; elapsedBeforeRun = 0; monotonicStart = 0; wallStart = 0; splits = [];

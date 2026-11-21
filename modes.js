@@ -1,4 +1,4 @@
-/* Contador WOD 2.2.1: nuevos modos aislados del cronómetro original 2.1. */
+/* Contador WOD 2.2.2: cuenta atrás previa, sin alterar los tiempos de sesión. */
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
@@ -25,7 +25,55 @@
   let lastCuePhase = null;
   let lastCueSecond = null;
   let lastCueElapsed = null;
-  let prefs = { keepAwake: true, wodSound: true };
+  let prefs = { keepAwake: true, wodSound: true, startCountdown10: true };
+
+  // Temporizador de preparación COMPARTIDO por todos los modos.
+  // No persiste como sesión activa: al cerrar/ocultar la app se cancela.
+  let prestart = null;
+  let prestartInterval = 0;
+  const prestartApi = {
+    enabled: () => prefs.startCountdown10,
+    active: mode => Boolean(prestart && (!mode || prestart.mode === mode)),
+    remaining: mode => prestart && prestart.mode === mode ? prestart.remaining : null,
+    cancel() {
+      if (!prestart) return;
+      const callback = prestart.onCancel;
+      prestart = null;
+      clearInterval(prestartInterval);
+      prestartInterval = 0;
+      callback?.();
+    },
+    begin(mode, { onTick, onGo, onCancel }) {
+      this.cancel();
+      if (!prefs.startCountdown10 || document.hidden) return false;
+      const deadline = performance.now() + 10000;
+      prestart = { mode, onTick, onGo, onCancel, remaining: 10 };
+      const update = () => {
+        const target = prestart;
+        if (!target || target.mode !== mode) return;
+        if (document.hidden) { this.cancel(); return; }
+        const timeLeft = deadline - performance.now();
+        if (timeLeft <= 0) {
+          prestart = null;
+          clearInterval(prestartInterval);
+          prestartInterval = 0;
+          target.onGo?.();
+          return;
+        }
+        const seconds = Math.ceil(timeLeft / 1000);
+        if (seconds !== target.remaining) {
+          target.remaining = seconds;
+          target.onTick?.(seconds);
+        }
+      };
+      onTick?.(10);
+      prestartInterval = setInterval(update, 70);
+      return true;
+    }
+  };
+  window.contadorPrestart = prestartApi;
+  document.addEventListener('visibilitychange', () => { if (document.hidden) prestartApi.cancel(); });
+  window.addEventListener('pagehide', () => prestartApi.cancel());
 
   const safeRead = key => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (_) { return null; } };
   const safeWrite = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) { notice('No se puede guardar la sesión en este navegador'); } };
@@ -100,6 +148,7 @@
     if (fromStore && typeof fromStore === 'object') {
       prefs.keepAwake = fromStore.keepAwake !== false;
       if (typeof fromStore.wodSound === 'boolean') prefs.wodSound = fromStore.wodSound;
+      prefs.startCountdown10 = fromStore.startCountdown10 !== false;
     } else {
       const original = safeRead(LEGACY_KEY);
       if (original && typeof original.soundEnabled === 'boolean') prefs.wodSound = original.soundEnabled;
@@ -110,8 +159,16 @@
 
   function updatePreferencesUI() {
     for (const id of ['keepScreenPicker', 'keepScreenLegacy', 'keepScreenWod']) $(id).checked = prefs.keepAwake;
+    for (const id of ['countdownPicker', 'countdownLegacy', 'countdownWod']) $(id).checked = prefs.startCountdown10;
     wodSoundBtn.textContent = prefs.wodSound ? 'SONIDO' : 'SILENCIO';
     wodSoundBtn.setAttribute('aria-label', prefs.wodSound ? 'Desactivar sonido de WOD' : 'Activar sonido de WOD');
+  }
+
+  function setCountdownEnabled(enabled) {
+    prefs.startCountdown10 = enabled;
+    safeWrite(PREFERENCES_KEY, prefs);
+    if (!enabled) prestartApi.cancel();
+    updatePreferencesUI();
   }
 
   function setWakeEnabled(enabled) {
@@ -257,8 +314,18 @@
     rafId = requestAnimationFrame(tick);
   }
 
-  function start() {
+  function start(skipCountdown = false) {
     if (!current || !['ready', 'paused'].includes(current.status)) return;
+    if (prestartApi.active('wod')) { prestartApi.cancel(); return; }
+    if (!skipCountdown && current.status === 'ready' && prestartApi.enabled()) {
+      prestartApi.begin('wod', {
+        onTick: seconds => { renderUI(); if (seconds <= 3) sound(760, .08); },
+        onGo: () => start(true),
+        onCancel: () => renderUI()
+      });
+      sound(650, .05); // Desbloquea el audio mediante el toque del usuario.
+      return;
+    }
     current.status = 'running';
     current.wallStart = Date.now();
     monotonicStart = performance.now();
@@ -372,6 +439,18 @@
       $('wodResultDetails').textContent = finished ? `Tiempo: ${format(t)}${reason ? '' : ' · Detenido manualmente'}` : description();
     }
     renderClock(t, phaseAt(t));
+    const preparacion = prestartApi.remaining('wod');
+    if (preparacion !== null) {
+      $('wodStatusText').textContent = 'CUENTA ATRÁS DE SALIDA';
+      $('wodTimer').textContent = format(preparacion * 1000);
+      $('wodPhase').textContent = `PREPARACIÓN · ${preparacion} s`;
+      $('wodSubTime').textContent = 'El tiempo del WOD comenzará después';
+      $('wodMainText').textContent = 'CANCELAR';
+      $('wodMainSub').textContent = 'Cancelar cuenta atrás';
+      main.setAttribute('aria-label', 'Cancelar cuenta atrás');
+      main.classList.add('prestarting');
+      $('wodProgressFill').style.width = '0%';
+    } else main.classList.remove('prestarting');
   }
 
   function renderHistory() {
@@ -402,6 +481,7 @@
   function renderAll() { renderHistory(); renderUI(); }
 
   function show(screen) {
+    if (prestartApi.active() && currentScreen !== screen) prestartApi.cancel();
     currentScreen = screen;
     selectedScreen.hidden = screen !== 'picker';
     legacyScreen.hidden = screen !== 'legacy';
@@ -466,6 +546,7 @@
     if(current && ['running','paused','finished'].includes(current.status)) {
       if(!window.confirm('Hay una sesión anterior en el Contador WOD. ¿Quieres sustituirla por el nuevo entrenamiento? Los resultados de la anterior podrían perderse.'))return false;
     }
+    prestartApi.cancel();
     if(current?.status==='running')cancelAnimationFrame(rafId);
     releaseWake();resetCues();
     current={version:1,mode:prepared.mode,status:'ready',config:prepared.config,elapsedBeforeRun:0,wallStart:0,splits:[],doneIntervals:[],extraReps:0,finishReason:null,finishedAt:null,source:'generador-wod'};
@@ -515,6 +596,7 @@
     loadPreferences();
     loadSession();
     for (const id of ['keepScreenPicker', 'keepScreenLegacy', 'keepScreenWod']) $(id).addEventListener('change', e => setWakeEnabled(e.target.checked));
+    for (const id of ['countdownPicker', 'countdownLegacy', 'countdownWod']) $(id).addEventListener('change', e => setCountdownEnabled(e.target.checked));
     wodSoundBtn.addEventListener('click', () => {
       prefs.wodSound = !prefs.wodSound;
       safeWrite(PREFERENCES_KEY, prefs); updatePreferencesUI();
@@ -555,6 +637,7 @@
     $('wodResetBtn').addEventListener('click', () => {
       if (!current) return;
       if (!window.confirm('¿Reiniciar esta sesión? Se borrarán las rondas y los registros de este WOD.')) return;
+      prestartApi.cancel();
       const mode = current.mode, config = { ...current.config };
       cancelAnimationFrame(rafId); releaseWake(); resetCues();
       current = { version: 1, mode, status: 'ready', config, elapsedBeforeRun: 0, wallStart: 0, splits: [], doneIntervals: [], extraReps: 0, finishReason: null, finishedAt: null };

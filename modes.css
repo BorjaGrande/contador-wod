@@ -40,3 +40,8 @@
 .wod-screen.resting .wod-phase { color: #ffc27b; }
 .wod-screen .status.finished .dot { background: #6aaaff; }
 @media (max-width: 350px) { .top-actions .icon-btn { min-width: 58px; padding: 4px 6px; } .mode-tile { padding: 13px 10px; } .config-row input { width: 100px; } }
+
+/* v2.2.2 · opción de salida configurada */
+.countdown-toggle { margin-top: 15px; padding: 11px 12px; border: 1px solid #335f54; border-radius: 13px; background: #13332d80; color: #e0fff3; font-size: .85rem; font-weight: 750; cursor: pointer; }
+.countdown-toggle input { width: 21px; height: 21px; }
+.main-button.prestarting { background: linear-gradient(145deg, #ffd497, #eea956 60%, #bd7835); border-color: #644a26; color: #38250e; }
