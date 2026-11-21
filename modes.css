@@ -45,3 +45,5 @@
 .countdown-toggle { margin-top: 15px; padding: 11px 12px; border: 1px solid #335f54; border-radius: 13px; background: #13332d80; color: #e0fff3; font-size: .85rem; font-weight: 750; cursor: pointer; }
 .countdown-toggle input { width: 21px; height: 21px; }
 .main-button.prestarting { background: linear-gradient(145deg, #ffd497, #eea956 60%, #bd7835); border-color: #644a26; color: #38250e; }
+
+.wod-result-send{display:block;text-align:center;text-decoration:none;margin:14px 0 4px;padding:15px 12px;border-radius:14px;background:#43e7b0;color:#063c2e;font-weight:900;min-height:52px;letter-spacing:.01em}.wod-result-send:focus-visible{outline:3px solid #fff;outline-offset:3px}.wod-result-send-hint{font-size:.75rem;color:var(--muted);line-height:1.45;margin:5px 0 14px}

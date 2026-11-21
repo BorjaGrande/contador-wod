@@ -1,4 +1,4 @@
-/* Contador WOD 2.2.2: cuenta atrás previa, sin alterar los tiempos de sesión. */
+/* Contador WOD 2.2.3: retorno de resultados al Generador, sin alterar el tiempo ni las preferencias. */
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
@@ -75,6 +75,44 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) prestartApi.cancel(); });
   window.addEventListener('pagehide', () => prestartApi.cancel());
 
+  // La instantánea viaja como fragmento URL para compatibilidad entre apps aisladas en iOS.
+  function readIncomingWodMeta() {
+    const q=new URLSearchParams(window.location.search);
+    const raw=new URLSearchParams(window.location.hash.slice(1)).get('gw');
+    if(!raw||raw.length>4500)return null;
+    let m;try{m=JSON.parse(raw)}catch{return null;}
+    if(!m||!/^wod-[a-zA-Z0-9-]{1,95}$/.test(m.id||'')||m.id!==q.get('wodid')||
+       !/^\d{4}-\d{2}-\d{2}$/.test(m.date||'')||m.mode!==q.get('mode')||
+       typeof m.title!=='string'||!m.title.trim()||m.title.length>140||
+       !Array.isArray(m.movements)||m.movements.length<1||m.movements.length>8||
+       !m.movements.every(x=>x&&typeof x.name==='string'&&x.name.length<=100&&typeof x.amount==='string'&&x.amount.length<=100))return null;
+    return {id:m.id,date:m.date,title:m.title,mode:m.mode,strategy:m.strategy,level:m.level,
+      objective:m.objective,profileName:m.profileName,movements:m.movements,patterns:m.patterns,
+      readiness:m.readiness,effort:m.effort};
+  }
+  function newRunId(){return 'cw-'+Date.now()+'-'+Math.floor(Math.random()*1e8).toString(36);}
+  function transferResultUrl(session=current) {
+    if(!session||session.status!=='finished'||session.source!=='generador-wod'||!session.sourceWod)return null;
+    const t=Math.max(0,Math.round(session.elapsedBeforeRun));
+    const minutes=Math.floor(t/60000), sec=String(Math.floor(t/1000)%60).padStart(2,'0');
+    let result;
+    if(session.mode==='amrap')result=`${session.splits.length} rondas${session.extraReps?' + '+session.extraReps+' reps':''} · ${minutes}:${sec}`;
+    else if(session.mode==='fortime')result=session.finishReason==='limit'?`CAP ${minutes}:${sec} · ${session.splits.length} vueltas`:`FOR TIME ${minutes}:${sec} · ${session.splits.length} vueltas marcadas`;
+    else if(session.mode==='emom')result=`EMOM ${session.doneIntervals.length}/${session.config.intervals} intervalos marcados · ${minutes}:${sec}`;
+    else result=`TABATA ${session.finishReason==='limit'?'completado':'detenido'} · ${minutes}:${sec}`;
+    const payload={version:1,from:'contador-wod',runId:session.runId||'cw-'+session.finishedAt,
+      finishedAt:session.finishedAt,elapsedMs:t,finishReason:session.finishReason,
+      mode:session.mode,splitsCount:session.splits.length,extraReps:session.extraReps||0,
+      doneIntervals:session.doneIntervals.length,splitTimesMs:session.splits.slice(0,120).map(x=>Math.round(x)),markedIntervals:session.doneIntervals.slice(0,120),result,wod:session.sourceWod};
+    const url=new URL('https://borjagrande.github.io/generador-wod-beta/');
+    url.hash='wodresult='+encodeURIComponent(JSON.stringify(payload));return url.href;
+  }
+  function updateResultTransferButton(){
+    const link=$('sendWodResultBtn'),hint=$('sendWodResultHint');
+    let url=null;try{url=transferResultUrl()}catch(err){console.warn('Transferencia no disponible:',err);}
+    link.hidden=!url;hint.hidden=!url;
+    if(url)link.href=url;else link.removeAttribute('href');
+  }
   const safeRead = key => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (_) { return null; } };
   const safeWrite = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) { notice('No se puede guardar la sesión en este navegador'); } };
   const integer = (id, min, max) => {
@@ -420,6 +458,7 @@
     $('wodUndoBtn').hidden = current.mode === 'tabata';
     $('repsBox').hidden = !(current.mode === 'amrap' && finished);
     $('wodExportBtn').disabled = status === 'ready';
+    updateResultTransferButton();
     const t = elapsed();
     const amount = current.mode === 'emom' ? current.doneIntervals.length : current.mode === 'tabata' ? (finished ? current.config.rounds : Math.min(current.config.rounds, phaseAt(t).index)) : current.splits.length;
     $('wodCount').textContent = current.mode === 'emom' ? `${amount} marcados` : current.mode === 'tabata' ? `${amount} rondas` : `${amount} ${amount === 1 ? 'vuelta' : 'vueltas'}`;
@@ -533,6 +572,7 @@
     if (session.mode === 'tabata' && !(valid(c.rounds, 1, 60) && valid(c.work, 5, 600) && valid(c.rest, 5, 600))) return false;
     if(session.mode==='tabata' && c.blocks!==undefined && !(valid(c.blocks,1,6)&&valid(c.roundsPerBlock,1,60)&&valid(c.breakSeconds,0,600)&&c.blocks*c.roundsPerBlock===c.rounds))return false;
     if (session.status === 'running' && !Number.isFinite(session.wallStart)) return false;
+    if(session.sourceWod && (!/^wod-[a-zA-Z0-9-]{1,95}$/.test(session.sourceWod.id||'')||session.sourceWod.mode!==session.mode))delete session.sourceWod;
     session.extraReps = Number.isInteger(session.extraReps) && session.extraReps >= 0 && session.extraReps <= 999 ? session.extraReps : 0;
     return true;
   }
@@ -549,7 +589,7 @@
     prestartApi.cancel();
     if(current?.status==='running')cancelAnimationFrame(rafId);
     releaseWake();resetCues();
-    current={version:1,mode:prepared.mode,status:'ready',config:prepared.config,elapsedBeforeRun:0,wallStart:0,splits:[],doneIntervals:[],extraReps:0,finishReason:null,finishedAt:null,source:'generador-wod'};
+    current={version:1,mode:prepared.mode,status:'ready',config:prepared.config,elapsedBeforeRun:0,wallStart:0,splits:[],doneIntervals:[],extraReps:0,finishReason:null,finishedAt:null,source:'generador-wod',sourceWod:readIncomingWodMeta(),runId:newRunId()};
     $('extraReps').value='0';
     persist();show('wod');
     // Evita volver a importar la misma URL tras refrescar; la sesión READY ya está guardada.
@@ -640,7 +680,7 @@
       prestartApi.cancel();
       const mode = current.mode, config = { ...current.config };
       cancelAnimationFrame(rafId); releaseWake(); resetCues();
-      current = { version: 1, mode, status: 'ready', config, elapsedBeforeRun: 0, wallStart: 0, splits: [], doneIntervals: [], extraReps: 0, finishReason: null, finishedAt: null };
+      current = { version: 1, mode, status: 'ready', config, elapsedBeforeRun: 0, wallStart: 0, splits: [], doneIntervals: [], extraReps: 0, finishReason: null, finishedAt: null,source:current.source,sourceWod:current.sourceWod,runId:newRunId() };
       $('extraReps').value = '0';
       persist(); renderAll(); notice('Sesión reiniciada');
     });

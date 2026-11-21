@@ -1,53 +1,7 @@
-# Contador WOD 2.2.2 — integración con Generador WOD
+# Contador WOD 2.2.3 — Devolver resultados al Generador
 
-## Incluye
+El botón «Enviar resultado al Generador WOD» aparece solo cuando termina una sesión iniciada desde Generador 1.0.14 o posterior. Transfiere modalidad, tiempo medido, rondas/vueltas marcadas y repeticiones adicionales (si se registran), sin modificar las preferencias, los cronómetros ni el contador de vueltas original.
 
-- VUELTAS: contador original 2.1 (cronómetro, estadísticas, pausa, deshacer, CSV, sonido).
-- AMRAP: tiempo descendente, rondas y repeticiones extras.
-- FOR TIME: cronómetro ascendente, vueltas, finalización manual y cap opcional.
-- EMOM: intervalos automáticos y registro de intervalos completados.
-- TABATA: alternancia programable de trabajo y descanso.
-- Pantalla encendida opcional mientras el entrenamiento está en marcha (si iOS lo permite).
-- Audio para eventos mientras la aplicación está activa, persistencia en `localStorage` y caché sin conexión.
+La transferencia se realiza a través del fragmento de un enlace y no envía resultados a un servidor. El Contador mantiene la sesión finalizada hasta que el usuario la sustituye o reinicia. El Generador pide confirmar RPE y cargas antes de guardar.
 
-## Antes de publicar
-
-1. Conservar las etiquetas anteriores; esta versión es un parche sobre la 2.2.0 estable.
-2. Exportar en CSV cualquier sesión anterior que se quiera conservar; evitar actualizar mientras un cronómetro esté en marcha.
-3. Mantener el repositorio `contador-wod-beta` sin cambios como referencia de pruebas.
-
-## Publicación
-
-1. Descomprimir el ZIP de producción.
-2. Subir los **9 archivos** directamente a la raíz del repositorio principal `contador-wod`; sobrescribir los homónimos y confirmar el commit.
-3. GitHub Pages debe seguir apuntando a la rama `main` y la carpeta `/(root)`.
-4. Abrir con internet la aplicación instalada en el iPhone. Si todavía muestra la 2.1, cerrar/abrir con internet y comprobar si se ha activado el nuevo service worker. No borrar datos ni desinstalar la app como primera medida.
-5. Repetir pruebas de humo: abrir, sesión original intacta, AMRAP, modo avión, sonido y pantalla encendida.
-6. Si funciona, crear etiqueta **v2.2.1** para identificar el commit publicado.
-
-## Persistencia y precauciones
-
-- Clave del contador original: `contador-vueltas-v2`. **No se cambia**.
-- Claves adicionales de los nuevos modos: `contador-wod-v2.2-session`, `contador-wod-v2.2-preferences`.
-- La beta usaba claves separadas. Sus sesiones de prueba **no se transfieren automáticamente** a producción.
-- Las sesiones se guardan solo en el navegador/dispositivo; borrar los datos del sitio o eliminar la app puede borrarlas.
-- iOS puede impedir sonidos en segundo plano o denegar Screen Wake Lock.
-- La actualización del service worker puede precisar volver a abrir la aplicación con conexión; no es necesario reinstalarla.
-
-
-## Integración v2.2.1
-- Acepta URL `?from=generador-wod&v=1&mode=fortime&cap=15` y variantes AMRAP, EMOM y TABATA.
-- Verifica rangos y crea sesión pausada/lista, sin iniciarla automáticamente.
-- Soporta TABATA con descansos entre bloques enviados desde el Generador.
-- Pregunta antes de reemplazar sesiones activas o terminadas. No toca datos del contador original 2.1.
-- Mantiene las mismas claves de almacenamiento. Actualizar **antes** que Generador WOD v1.0.13.
-
-
-## Ajuste v2.2.2 — cuenta atrás de salida opcional
-
-- Añade la casilla **Cuenta atrás inicial de 10 s**, activada por defecto, a selección de modo, vueltas y contador WOD. Las tres reflejan la misma preferencia.
-- Al pulsar INICIAR desde una sesión nueva, muestra 10…1 y suena una señal al comenzar; el cronómetro empieza **después** de la cuenta atrás. Los 10 s no alteran el CAP ni la duración de AMRAP/EMOM/TABATA.
-- Desmarcada: INICIAR comienza inmediatamente. Al reanudar una pausa no repite la cuenta atrás.
-- Durante la cuenta atrás, el botón principal permite cancelarla. Ocultar/cerrar la aplicación o cambiar de modo la cancela para evitar iniciar un entrenamiento sin verlo.
-- Se recuerda la casilla en la clave de preferencias existente `contador-wod-v2.2-preferences` como `startCountdown10`; no modifica las claves ni el contenido de los entrenamientos guardados. Las sesiones recibidas desde Generador WOD también respetan la preferencia.
-- Versión de caché `v2.2.2`. Solo hay que actualizar el Contador; el Generador WOD 1.0.13 no cambia.
+**Instalación:** subir los nueve archivos a la raíz de contador-wod en GitHub Pages, preferiblemente después de exportar los resultados necesarios. No borrar datos ni desinstalar. Actualizar también Generador WOD a 1.0.14.

@@ -126,7 +126,7 @@
 
     <section id="modeSelectScreen" class="mode-picker" hidden aria-labelledby="modePickerHeading">
       <div class="mode-intro">
-        <div class="eyebrow">CONTADOR WOD 2.2.2</div>
+        <div class="eyebrow">CONTADOR WOD 2.2.3</div>
         <h2 id="modePickerHeading">¿Qué vas a entrenar?</h2>
         <p>Elige una modalidad y configura el cronómetro.</p>
       </div>
@@ -220,6 +220,8 @@
         <div id="wodResultDetails" class="wod-result-detail"></div>
         <div id="repsBox" class="config-row" hidden><label for="extraReps">Repeticiones adicionales</label><input id="extraReps" type="number" min="0" max="999" step="1" value="0" inputmode="numeric"></div>
       </div>
+      <a id="sendWodResultBtn" class="wod-result-send" href="#" hidden>Enviar resultado al Generador WOD</a>
+      <p id="sendWodResultHint" class="wod-result-send-hint" hidden>Se abrirá una ficha en el Generador con el resultado medido. Antes de guardarlo completarás RPE, pesos y sensaciones.</p>
       <div class="section-head"><span class="section-title" id="wodHistoryTitle">Registro</span><span id="wodCount" class="count">0 rondas</span></div>
       <ol id="wodHistory" class="lap-list"><li class="empty">Comienza tu sesión para registrar el entrenamiento.</li></ol>
       <div class="tools">
@@ -229,7 +231,7 @@
       </div>
       <p class="wod-note">Los avisos sonoros dependen de iOS y de que la aplicación esté visible. No son alarmas en segundo plano.</p>
     </section>
-    <p class="footer">La sesión se guarda en este dispositivo · <span id="offlineStatus">Preparando modo sin conexión…</span><br>Contador WOD 2.2.2 · Estable</p>
+    <p class="footer">La sesión se guarda en este dispositivo · <span id="offlineStatus">Preparando modo sin conexión…</span><br>Contador WOD 2.2.3 · Estable</p>
   </main>
 
   <dialog id="confirmDialog" aria-labelledby="dialogTitle">
